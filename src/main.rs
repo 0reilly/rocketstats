@@ -4,7 +4,7 @@ use std::fmt;
 use actix_files::Files;
 use deadpool_postgres::{Config, Pool};
 use tokio_postgres::NoTls;
-use actix_web::web::Data;
+use actix_web::web::{Data, Json};
 use log::{info, LevelFilter};
 use env_logger::Builder;
 
@@ -42,7 +42,7 @@ async fn create_pool() -> Pool {
     pool
 }
 
-async fn save_event_data(pool: &Pool, event_data: &EventData) -> Result<(), tokio_postgres::Error> {
+async fn save_event_data(pool: &Pool, event_data: &Json<EventData>) -> Result<(), tokio_postgres::Error> {
     let client = pool.get().await.unwrap();
 
     client
@@ -89,8 +89,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(Data::new(pool.clone()))
             .service(handle_event)
-            .service(Files::new("/api/tracking", "../static").show_files_listing()) // Add this line
-
+            .service(Files::new("/static", "./static").show_files_listing())
     })
         .bind("0.0.0.0:8080")?
         .run();
