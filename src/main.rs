@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder, post};
 use serde::Deserialize;
 use std::fmt;
+use actix_files::Files;
 use deadpool_postgres::{Config, Pool};
 use tokio_postgres::NoTls;
 use actix_web::web::Data;
@@ -88,6 +89,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(Data::new(pool.clone()))
             .service(handle_event)
+            .service(Files::new("/api/tracking", "./static").show_files_listing()) // Add this line
+
     })
         .bind("0.0.0.0:8080")?
         .run();
