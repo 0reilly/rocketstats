@@ -1,6 +1,8 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder, post};
 use serde::Deserialize;
 use std::fmt;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use actix_files::Files;
 use deadpool_postgres::{Config, Pool};
 use tokio_postgres::NoTls;
@@ -76,6 +78,20 @@ async fn handle_event(
     }
 }
 
+#[get("/api/tracking/script.js")]
+async fn serve_script() -> HttpResponse {
+    let file = File::open("/src/static/script.js").unwrap();
+    let mut reader = BufReader::new(file);
+
+    let mut content = Vec::new();
+    reader.read_to_end(&mut content).unwrap();
+
+    HttpResponse::Ok()
+        .content_type("application/javascript")
+        .body(content)
+}
+
+
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     // Initialize the logger
@@ -89,7 +105,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(Data::new(pool.clone()))
             .service(handle_event)
-            .service(Files::new("/static", "./static").show_files_listing())
+            .service(serve_script)
     })
         .bind("0.0.0.0:8080")?
         .run();
