@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder, post};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder, post, get};
 use serde::Deserialize;
 use std::fmt;
 use std::fs::File;
@@ -79,16 +79,27 @@ async fn handle_event(
 }
 
 #[get("/api/tracking/script.js")]
-async fn serve_script() -> HttpResponse {
-    let file = File::open("/src/static/script.js").unwrap();
+async fn serve_script() -> Result<HttpResponse, actix_web::Error> {
+    let file = match File::open("./src/static/script.js") {
+        Ok(file) => file,
+        Err(_) => {
+            return Ok(
+                HttpResponse::NotFound()
+                    .content_type("text/plain")
+                    .body("File not found"),
+            );
+        }
+    };
     let mut reader = BufReader::new(file);
 
     let mut content = Vec::new();
     reader.read_to_end(&mut content).unwrap();
 
-    HttpResponse::Ok()
-        .content_type("application/javascript")
-        .body(content)
+    Ok(
+        HttpResponse::Ok()
+            .content_type("application/javascript")
+            .body(content),
+    )
 }
 
 
