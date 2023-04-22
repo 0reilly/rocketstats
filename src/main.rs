@@ -1,31 +1,17 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder, post, get};
 use serde::Deserialize;
-use std::fmt;
-use std::fs::File;
-use std::io::{BufReader, Read};
-use actix_files::Files;
+use std::convert::Infallible;
+use warp::{Filter, Reply};
 use deadpool_postgres::{Config, Pool};
 use tokio_postgres::NoTls;
-use actix_web::web::{Data, Json};
-use log::{info, LevelFilter};
-use env_logger::Builder;
+use std::sync::Arc;
+use warp::fs::dir;
 
-impl fmt::Debug for EventData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EventData")
-            .field("url", &self.url)
-            .field("referrer", &self.referrer)
-            .field("user_agent", &self.device.user_agent)
-            .finish()
-    }
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Device {
     user_agent: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct EventData {
     url: String,
     referrer: String,
@@ -44,7 +30,7 @@ async fn create_pool() -> Pool {
     pool
 }
 
-async fn save_event_data(pool: &Pool, event_data: &Json<EventData>) -> Result<(), tokio_postgres::Error> {
+async fn save_event_data(pool: &Pool, event_data: EventData) -> Result<(), tokio_postgres::Error> {
     let client = pool.get().await.unwrap();
 
     client
@@ -61,67 +47,40 @@ async fn save_event_data(pool: &Pool, event_data: &Json<EventData>) -> Result<()
     Ok(())
 }
 
-#[post("/api/tracking/event")]
-async fn handle_event(
-    pool: web::Data<Pool>,
-    event_data: web::Json<EventData>,
-) -> impl Responder {
+async fn handle_event(event_data: EventData, pool: Arc<Pool>) -> Result<impl Reply, Infallible> {
     println!("Received event data: {:?}", event_data);
 
     // Save the event data to the PostgreSQL database
-    match save_event_data(&pool, &event_data).await {
-        Ok(_) => HttpResponse::Ok().finish(),
+    match save_event_data(&pool, event_data).await {
+        Ok(_) => Ok(warp::reply::with_status("OK", warp::http::StatusCode::OK)),
         Err(e) => {
             println!("Error saving event data: {:?}", e);
-            HttpResponse::InternalServerError().finish()
+            Ok(warp::reply::with_status(
+                "Internal Server Error",
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ))
         }
     }
 }
 
-#[get("/api/tracking/script.js")]
-async fn serve_script() -> Result<HttpResponse, actix_web::Error> {
-    let file = match File::open("./src/static/script.js") {
-        Ok(file) => file,
-        Err(_) => {
-            return Ok(
-                HttpResponse::NotFound()
-                    .content_type("text/plain")
-                    .body("File not found"),
-            );
-        }
-    };
-    let mut reader = BufReader::new(file);
-
-    let mut content = Vec::new();
-    reader.read_to_end(&mut content).unwrap();
-
-    Ok(
-        HttpResponse::Ok()
-            .content_type("application/javascript")
-            .body(content),
-    )
-}
-
-
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() {
     // Initialize the logger
-    Builder::new()
-        .filter(None, LevelFilter::Info)
-        .init();
+    env_logger::init();
 
-    let pool = create_pool().await;
+    let pool = Arc::new(create_pool().await);
 
-    let server = HttpServer::new(move || {
-        App::new()
-            .app_data(Data::new(pool.clone()))
-            .service(handle_event)
-            .service(serve_script)
-    })
-        .bind("0.0.0.0:8080")?
-        .run();
+    let event_route = warp::path!("api" / "tracking" / "event")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(warp::any().map(move || Arc::clone(&pool)))
+        .and_then(|event_data, pool| handle_event(event_data, pool));
 
-    info!("Server started on http://127.0.0.1:8080");
+    let static_route = warp::path("api").and(warp::path("tracking")).and(dir("./static"));
 
-    server.await
+    let routes = event_route.or(static_route);
+
+    println!("Server started on http://127.0.0.1:8080");
+
+    warp::serve(routes).run(([127, 0, 0, 1], 8081)).await;
 }
