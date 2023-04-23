@@ -22,7 +22,7 @@ async fn create_pool() -> PgPool {
     pool
 }
 
-async fn save_event_data(pool: &Pool, event_data: &EventData) -> Result<(), sqlx::Error> {
+async fn save_event_data(pool: &Pool<DB>, event_data: &EventData) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO event_tracking (url, referrer, user_agent) VALUES ($1, $2, $3)",
         event_data.url,
