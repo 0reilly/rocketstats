@@ -82,5 +82,5 @@ async fn main() {
     println!("Server started on http://127.0.0.1:8080");
 
     //set the port to use on vps
-    warp::serve(routes).run(([91, 107, 211, 239], 8080)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }
