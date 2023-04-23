@@ -1,8 +1,7 @@
 use serde::Deserialize;
 use std::convert::Infallible;
 use warp::{Filter, Reply};
-use deadpool_postgres::{Config, Pool};
-use tokio_postgres::NoTls;
+use sqlx::{PgPool, Pool};
 use std::sync::Arc;
 use warp::fs::dir;
 
@@ -18,39 +17,29 @@ struct EventData {
     device: Device,
 }
 
-async fn create_pool() -> Pool {
-    let mut cfg = Config::default();
-    cfg.dbname = Some("mydb".to_string());
-    cfg.user = Some("myuser".to_string());
-    cfg.password = Some("mypassword".to_string());
-    cfg.host = Some("localhost".to_string());
-    cfg.port = Some(5432);
-
-    let pool = cfg.create_pool(NoTls).unwrap();
+async fn create_pool() -> PgPool {
+    let pool = PgPool::connect("postgres://myuser:mypassword@localhost:5432/mydb").await.unwrap();
     pool
 }
 
-async fn save_event_data(pool: &Pool, event_data: EventData) -> Result<(), tokio_postgres::Error> {
-    let client = pool.get().await.unwrap();
-    client
-        .execute(
-            "INSERT INTO event_tracking (url, referrer, user_agent) VALUES ($1, $2, $3)",
-            &[
-                &event_data.url,
-                &event_data.referrer,
-                &event_data.device.user_agent,
-            ],
-        )
+async fn save_event_data(pool: &Pool, event_data: &EventData) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO event_tracking (url, referrer, user_agent) VALUES ($1, $2, $3)",
+        event_data.url,
+        event_data.referrer,
+        event_data.device.user_agent,
+    )
+        .execute(pool)
         .await?;
 
     Ok(())
 }
 
-async fn handle_event(event_data: EventData, pool: Arc<Pool>) -> Result<impl Reply, Infallible> {
+async fn handle_event(event_data: EventData, pool: Arc<PgPool>) -> Result<impl Reply, Infallible> {
     println!("Received event data: {:?}", event_data);
 
     // Save the event data to the PostgreSQL database
-    match save_event_data(&pool, event_data).await {
+    match save_event_data(&pool, &event_data).await {
         Ok(_) => Ok(warp::reply::with_status("OK", warp::http::StatusCode::OK)),
         Err(e) => {
             println!("Error saving event data: {:?}", e);
