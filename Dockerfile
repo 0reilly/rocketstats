@@ -7,6 +7,7 @@ WORKDIR /usr/src/rocketstats_backend
 # Copy the source code
 COPY src ./src
 COPY static ./static
+COPY .env ./.env
 
 
 # Copy Cargo.toml and Cargo.lock to the working directory

@@ -1058,6 +1058,7 @@ name = "rocketstats_backend"
 version = "0.1.0"
 dependencies = [
  "deadpool-postgres",
+ "dotenv",
  "env_logger",
  "serde",
  "serde_json",

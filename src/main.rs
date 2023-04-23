@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use warp::{Filter, Reply};
 use sqlx::{PgPool, Pool};
 use std::sync::Arc;
+use dotenv::dotenv;
 use warp::fs::dir;
 
 #[derive(Deserialize, Debug)]
@@ -18,11 +19,12 @@ struct EventData {
 }
 
 async fn create_pool() -> PgPool {
-    let pool = PgPool::connect("postgres://myuser:mypassword@localhost:5432/mydb").await.unwrap();
+    dotenv().ok();
+    let pool = PgPool::connect(&std::env::var("DATABASE_URL").unwrap()).await.unwrap();
     pool
 }
 
-async fn save_event_data(pool: &Pool<DB>, event_data: &EventData) -> Result<(), sqlx::Error> {
+async fn save_event_data(pool: &PgPool, event_data: &EventData) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO event_tracking (url, referrer, user_agent) VALUES ($1, $2, $3)",
         event_data.url,
@@ -34,6 +36,7 @@ async fn save_event_data(pool: &Pool<DB>, event_data: &EventData) -> Result<(), 
 
     Ok(())
 }
+
 
 async fn handle_event(event_data: EventData, pool: Arc<PgPool>) -> Result<impl Reply, Infallible> {
     println!("Received event data: {:?}", event_data);

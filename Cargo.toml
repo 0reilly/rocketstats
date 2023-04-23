@@ -13,3 +13,4 @@ tokio = { version = "1", features = ["full"] }
 deadpool-postgres = "0.9"
 sqlx = { version = "0.5", features = ["postgres", "runtime-tokio-rustls"] }
 env_logger = "0.9"
+dotenv = "0.15"
