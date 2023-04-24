@@ -7,6 +7,7 @@ WORKDIR /usr/src/rocketstats_backend
 # Copy the source code
 COPY src ./src
 COPY static ./static
+COPY .env ./
 
 
 # Copy Cargo.toml and Cargo.lock to the working directory
@@ -26,5 +27,8 @@ RUN apt-get update && \
 # Copy the binary from the builder stage
 COPY --from=builder /usr/src/rocketstats_backend/target/release/rocketstats_backend /usr/local/bin/rocketstats_backend
 
+# Copy the entrypoint script
+COPY entrypoint.sh /app
+
 # Set the entry point
-ENTRYPOINT ["rocketstats_backend"]
+ENTRYPOINT ["/app/entrypoint.sh"]
