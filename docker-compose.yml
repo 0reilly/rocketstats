@@ -18,6 +18,7 @@ services:
     rocketstats_backend:
         build: .
         environment:
+            DATABASE_URL: postgres://myuser:mypassword@localhost:5432/mydb
             RUST_LOG: info
         ports:
             - "8080:8080"

@@ -27,8 +27,6 @@ RUN apt-get update && \
 # Copy the binary from the builder stage
 COPY --from=builder /usr/src/rocketstats_backend/target/release/rocketstats_backend /usr/local/bin/rocketstats_backend
 
-# Copy the entrypoint script
-COPY entrypoint.sh /app
 
 # Set the entry point
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["rocketstats_backend"]
