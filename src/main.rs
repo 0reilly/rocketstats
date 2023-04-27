@@ -57,7 +57,7 @@ async fn fetch_location_data(ip: &str) -> Result<Value, Box<dyn std::error::Erro
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
     let event_data: EventData = req.body_json().await?;
 
-    let location_data = fetch_location_data(&event_data.ip).await?;
+    let location_data = fetch_location_data(&event_data.ip).await.map_err(anyhow::Error::from)?;
     let utc_now: DateTime<Utc> = Utc::now();
     let est_now = utc_now.with_timezone(&Eastern);
     // Get the city, region (state), and country
