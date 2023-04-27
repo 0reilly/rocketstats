@@ -1,23 +1,21 @@
-(function() {
-    function sendData() {
-        var xhr = new XMLHttpRequest();
+(function () {
+    const scriptTag = document.querySelector('script[data-domain]');
+    const dataDomain = scriptTag ? scriptTag.getAttribute('data-domain') : null;
 
-        var url = 'https://www.rocketstats.co/api/tracking/event';
+    const eventData = {
+        domain: dataDomain,
+        url: window.location.href,
+        referrer: document.referrer,
+        device: {
+            user_agent: navigator.userAgent,
+        },
+    };
 
-        var data = {
-            url: document.location.href,
-            referrer: document.referrer,
-            device: {
-                userAgent: navigator.userAgent,
-            },
-        };
-
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
-        xhr.send(JSON.stringify(data));
-    }
-
-    window.addEventListener('load', function() {
-        sendData();
+    fetch('https://www.rocketstats.co/api/tracking/event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
     });
 })();
