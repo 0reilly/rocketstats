@@ -1,4 +1,3 @@
-use async_std::task;
 use mongodb::{bson::doc, options::ClientOptions, Client};
 use serde::Deserialize;
 use tide::{Request, Response, StatusCode};
@@ -15,6 +14,7 @@ struct EventData {
     url: String,
     referrer: String,
     device: Device,
+    ip: String,
 }
 
 #[derive(Debug, Deserialize)]
