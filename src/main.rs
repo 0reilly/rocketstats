@@ -6,7 +6,7 @@ use serde_json::Value;
 use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
-
+use anyhow::Error;
 
 #[derive(Debug, Deserialize)]
 struct EventData {
