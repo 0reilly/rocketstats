@@ -53,10 +53,8 @@ async fn handle_options(_req: Request<PgPool>) -> tide::Result {
 async fn handle_event(mut req: Request<PgPool>) -> tide::Result {
     let event_data: EventData = req.body_json().await?;
 
-    //console log the event data
-    println!("{:?}", event_data.device.user_agent);
-    println!("{:?}", event_data.referrer);
-    println!("{:?}", event_data.url);
+    //console log the event data (body is sent as stringified json)
+    println!("{:?}", event_data);
 
     Ok(Response::new(StatusCode::Ok))
 }
