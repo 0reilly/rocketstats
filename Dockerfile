@@ -1,32 +1,20 @@
-# Select a Rust base image
-FROM rust:latest as builder
+# Use an official Rust runtime as a parent image
+FROM rust:latest
 
-# Create a new directory for the app
-WORKDIR /usr/src/rocketstats_backend
+# Set the working directory to /app
+WORKDIR /app
 
-# Copy the source code
-COPY src ./src
-COPY static ./static
-COPY .env ./
+# Copy the current directory contents into the container at /app
+COPY . /app
 
+# Install any needed dependencies
+RUN cargo install --path .
 
-# Copy Cargo.toml and Cargo.lock to the working directory
-COPY Cargo.toml Cargo.lock ./
+# Make port 80 available to the world outside this container
+EXPOSE 80
 
-# Build the application
-RUN cargo build --release
+# Define environment variable
+ENV DATABASE_URL postgres://myuser:mypassword@db:5432/mydb
 
-# Use a lightweight base image for the final stage
-FROM debian:buster-slim
-
-# Install required libraries
-RUN apt-get update && \
-    apt-get install -y libpq5 && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy the binary from the builder stage
-COPY --from=builder /usr/src/rocketstats_backend/target/release/rocketstats_backend /usr/local/bin/rocketstats_backend
-
-
-# Set the entry point
-ENTRYPOINT ["rocketstats_backend"]
+# Run your application when the container launches
+CMD ["cargo", "run"]

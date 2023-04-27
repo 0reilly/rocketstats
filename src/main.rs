@@ -24,23 +24,28 @@ async fn main() -> tide::Result<()> {
 
     let mut app = tide::with_state(pool);
 
-    app.at("/events").post(handle_event);
+    app.at("/api/tracking/event").post(handle_event);
 
-    app.listen("127.0.0.1:8080").await?;
+    app.at("/static/:file")
+        .get(|req: Request<PgPool>| async move {
+            let file = req.param("file")?;
+            let path = format!("./static/{}", file);
+            let body = async_std::fs::read(path).await?;
+            Ok(Response::builder(StatusCode::Ok).body(tide::Body::from(body)).build())
+        });
+
+
+    app.listen("0.0.0.0:8080").await?;
     Ok(())
 }
 
 async fn handle_event(mut req: Request<PgPool>) -> tide::Result {
     let event_data: EventData = req.body_json().await?;
 
-    sqlx::query!(
-        "INSERT INTO events (url, referrer, user_agent) VALUES ($1, $2, $3)",
-        event_data.url,
-        event_data.referrer,
-        event_data.device.user_agent
-    )
-        .execute(&req.state().clone())
-        .await?;
+    //console log the event data
+    println!("{:?}", event_data.device.user_agent);
+    println!("{:?}", event_data.referrer);
+    println!("{:?}", event_data.url);
 
     Ok(Response::new(StatusCode::Ok))
 }
