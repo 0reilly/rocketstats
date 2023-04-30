@@ -6,7 +6,7 @@ use serde_json::Value;
 use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
-use anyhow::Context;
+use anyhow::{Context, Result};
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -22,7 +22,7 @@ struct Device {
     user_agent: String,
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> tide::Result<()> {
     tide::log::start();
 
@@ -43,16 +43,16 @@ async fn main() -> tide::Result<()> {
     Ok(())
 }
 
-async fn fetch_location_data(ip: &str) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+async fn fetch_location_data(ip: &str) -> Result<Value> {
     let client = ReqwestClient::new();
     let response = client
         .get(&format!("http://ip-api.com/json/{}", ip))
         .send()
-        .await?;
-    let location_data: Value = response.json().await?;
+        .await
+        .map_err(anyhow::Error::new)?;
+    let location_data: Value = response.json().await.map_err(anyhow::Error::new)?;
     Ok(location_data)
 }
-
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
     let event_data: EventData = req.body_json().await?;
@@ -72,7 +72,6 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
     );
     println!("   - Referrer: {:?}", event_data.referrer);
     println!("   - URL: {:?}", event_data.url);
-
 
     let events = db.collection("events");
     let document = doc! {
