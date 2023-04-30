@@ -1,12 +1,12 @@
+use std::env;
 use mongodb::{bson::doc, options::ClientOptions, Client};
 use serde::Deserialize;
-use tide::{Request, Response, StatusCode};
-use std::env;
+use tide::{Result, Request, Response, StatusCode};
 use serde_json::Value;
 use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
-use anyhow::{Context, Result};
+use anyhow::Context;
 
 
 #[derive(Debug, Deserialize)]
@@ -38,8 +38,8 @@ async fn main() -> tide::Result<()> {
 
     let mut app = tide::new();
 
+    app.at("/static").serve_dir("static/")?;
     app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
-    app.at("/static/*").serve_dir("static")?;
 
 
     app.listen("0.0.0.0:8080").await?;
@@ -57,10 +57,27 @@ async fn fetch_location_data(ip: &str) -> Result<Value> {
     Ok(location_data)
 }
 
+use std::error::Error as StdError;
+use std::fmt;
+
+#[derive(Debug)]
+struct CustomTideError(tide::Error);
+
+impl fmt::Display for CustomTideError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl StdError for CustomTideError {}
+
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
     let event_data: EventData = req.body_json().await?;
 
-    let location_data = fetch_location_data(&event_data.ip).await.context("Failed to fetch location data")?;
+    let location_data = fetch_location_data(&event_data.ip)
+        .await
+        .map_err(|e| anyhow::Error::new(CustomTideError(e)))
+        .context("Failed to fetch location data")?;
     let utc_now: DateTime<Utc> = Utc::now();
     let est_now = utc_now.with_timezone(&Eastern);
     // Get the city, region (state), and country
