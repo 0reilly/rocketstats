@@ -7,6 +7,8 @@ use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
 use anyhow::{Context, Result};
+use tide::prelude::*;
+
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -38,7 +40,7 @@ async fn main() -> tide::Result<()> {
     let mut app = tide::new();
 
     app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
-    app.at("/static").get(Dir::new("static"));
+    app.at("/static/*").get(tide::serve_dir("static"));
 
 
     app.listen("0.0.0.0:8080").await?;
