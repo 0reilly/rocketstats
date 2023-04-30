@@ -38,13 +38,8 @@ async fn main() -> tide::Result<()> {
     let mut app = tide::new();
 
     app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
-    app.at("/static/:file")
-        .get(|req: Request<PgPool>| async move {
-            let file = req.param("file")?;
-            let path = format!("/static/{}", file);
-            let body = async_std::fs::read(path).await?;
-            Ok(Response::builder(StatusCode::Ok).body(tide::Body::from(body)).build())
-        });
+    app.at("/static").get(Dir::new("static"));
+
 
     app.listen("0.0.0.0:8080").await?;
     Ok(())
