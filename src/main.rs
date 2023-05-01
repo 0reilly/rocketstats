@@ -7,7 +7,8 @@ use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
 use anyhow::Context;
-
+use tide::http::headers::HeaderValue;
+use tide::security::{CorsMiddleware, Origin};
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -38,6 +39,14 @@ async fn main() -> tide::Result<()> {
 
     let mut app = tide::new();
 
+    let cors = CorsMiddleware::new()
+        .allow_methods(HeaderValue::from_str("GET, POST, PUT, DELETE, OPTIONS").unwrap())
+        .allow_origin(Origin::from("*"))
+        .allow_credentials(false);
+
+    app.with(cors);
+
+
     app.at("/static").serve_dir("static/")?;
     app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
 
@@ -59,6 +68,8 @@ async fn fetch_location_data(ip: &str) -> Result<Value> {
 
 use std::error::Error as StdError;
 use std::fmt;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[derive(Debug)]
 struct CustomTideError(tide::Error);
@@ -72,12 +83,19 @@ impl fmt::Display for CustomTideError {
 impl StdError for CustomTideError {}
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
-    let event_data: EventData = req.body_json().await?;
+    let ip = req
+        .remote()
+        .and_then(|addr_str| addr_str.parse::<SocketAddr>().ok())
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| String::from("Unknown"));
+
+    let mut event_data: EventData = req.body_json().await?;
+    event_data.ip = ip;
 
     let location_data = fetch_location_data(&event_data.ip)
         .await
-        .map_err(|e| anyhow::Error::new(CustomTideError(e)))
-        .context("Failed to fetch location data")?;
+        .map_err(|e| anyhow::Error::new(CustomTideError(e.into())))?;
+
     let utc_now: DateTime<Utc> = Utc::now();
     let est_now = utc_now.with_timezone(&Eastern);
     // Get the city, region (state), and country
