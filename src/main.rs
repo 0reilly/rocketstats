@@ -16,7 +16,6 @@ struct EventData {
     url: String,
     referrer: String,
     device: Device,
-    ip: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,12 +88,13 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|| String::from("Unknown"));
 
-    let mut event_data: EventData = req.body_json().await?;
-    event_data.ip = ip;
+    let event_data: EventData = req.body_json().await?;
 
-    let location_data = fetch_location_data(&event_data.ip)
+    let location_data = fetch_location_data(&ip)
         .await
-        .map_err(|e| anyhow::Error::new(CustomTideError(e.into())))?;
+        .map_err(|e| anyhow::Error::new(CustomTideError(e)))
+        .context("Failed to fetch location data")?;
+
 
     let utc_now: DateTime<Utc> = Utc::now();
     let est_now = utc_now.with_timezone(&Eastern);
