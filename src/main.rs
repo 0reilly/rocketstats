@@ -6,7 +6,7 @@ use tide::{Request, Response, StatusCode};
 use serde_json::Value;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
-use anyhow::{Context, Result};
+use anyhow::{Context};
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
 use reqwest::Client as ReqwestClient;
@@ -71,12 +71,6 @@ async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
         .context("Failed to parse location data")?;
     Ok(location_data)
 }
-
-
-fn serde_json_error_to_anyhow(error: serde_json::Error) -> anyhow::Error {
-    anyhow::Error::msg(format!("{}", error))
-}
-
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
     let ip = req
