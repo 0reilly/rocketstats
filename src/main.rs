@@ -9,7 +9,8 @@ use chrono_tz::US::Eastern;
 use anyhow::{Context, Result};
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
-use surf::{Client as SurfClient};
+use reqwest::Client as ReqwestClient;
+
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -55,19 +56,22 @@ async fn main() -> tide::Result<()> {
     Ok(())
 }
 
-async fn fetch_location_data(ip: &str) -> Result<Value> {
-    let client = SurfClient::new();
+async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
+    let client = ReqwestClient::new();
     let response = client
         .get(&format!("http://ip-api.com/json/{}", ip))
-        .recv_string()
+        .send()
         .await
-        .map_err(|error| anyhow::Error::msg(format!("{}", error)))
-        .context("Failed to fetch location data")?;
+        .context("Failed to fetch location data")?
+        .text()
+        .await
+        .context("Failed to read response text")?;
+
     let location_data: Value = serde_json::from_str(&response)
-        .map_err(|error| anyhow::Error::msg(format!("{}", error)))
-        .context("Failed to deserialize location data")?;
+        .context("Failed to parse location data")?;
     Ok(location_data)
 }
+
 
 fn serde_json_error_to_anyhow(error: serde_json::Error) -> anyhow::Error {
     anyhow::Error::msg(format!("{}", error))
