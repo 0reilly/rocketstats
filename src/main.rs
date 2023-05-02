@@ -9,8 +9,7 @@ use chrono_tz::US::Eastern;
 use anyhow::{Context};
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
-use reqwest::Client as ReqwestClient;
-
+use surf::Client as surfClient;
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -26,7 +25,11 @@ struct Device {
 }
 
 #[tokio::main]
-async fn main() -> tide::Result<()> {
+async fn main() -> anyhow::Result<()> {
+    let port = env::var("PORT")
+        .ok()
+        .and_then(|port| u16::from_str(&port).ok())
+        .unwrap_or(8080);
     tide::log::start();
 
     let mongo_username = env::var("MONGO_USERNAME").expect("MONGO_USERNAME must be set");
@@ -52,20 +55,18 @@ async fn main() -> tide::Result<()> {
     app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
 
 
-    app.listen("0.0.0.0:8080").await?;
-    Ok(())
+    app.listen(format!("0.0.0.0:{}", port)).await?;
+    Result::<(), anyhow::Error>::Ok(())
 }
 
 async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
-    let client = ReqwestClient::new();
-    let response = client
+    let surf_client = surfClient::new();
+
+    let response = surf_client
         .get(&format!("http://ip-api.com/json/{}", ip))
-        .send()
+        .recv_string()
         .await
-        .context("Failed to fetch location data")?
-        .text()
-        .await
-        .context("Failed to read response text")?;
+        .map_err(anyhow::Error::msg)?;
 
     let location_data: Value = serde_json::from_str(&response)
         .context("Failed to parse location data")?;
