@@ -1,14 +1,15 @@
 use std::env;
+use std::str::FromStr;
 use mongodb::{bson::doc, options::ClientOptions, Client};
 use serde::Deserialize;
-use tide::{Result, Request, Response, StatusCode};
+use tide::{Request, Response, StatusCode};
 use serde_json::Value;
-use reqwest::Client as ReqwestClient;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
-use anyhow::Context;
+use anyhow::{Context, Result};
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
+use surf::{Client as SurfClient};
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -55,36 +56,28 @@ async fn main() -> tide::Result<()> {
 }
 
 async fn fetch_location_data(ip: &str) -> Result<Value> {
-    let client = ReqwestClient::new();
+    let client = SurfClient::new();
     let response = client
         .get(&format!("http://ip-api.com/json/{}", ip))
-        .send()
+        .recv_string()
         .await
-        .map_err(anyhow::Error::new)?;
-    let location_data: Value = response.json().await.map_err(anyhow::Error::new)?;
+        .map_err(|error| anyhow::Error::msg(format!("{}", error)))
+        .context("Failed to fetch location data")?;
+    let location_data: Value = serde_json::from_str(&response)
+        .map_err(|error| anyhow::Error::msg(format!("{}", error)))
+        .context("Failed to deserialize location data")?;
     Ok(location_data)
 }
 
-use std::error::Error as StdError;
-use std::fmt;
-use std::net::SocketAddr;
-use std::str::FromStr;
-
-#[derive(Debug)]
-struct CustomTideError(tide::Error);
-
-impl fmt::Display for CustomTideError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
+fn serde_json_error_to_anyhow(error: serde_json::Error) -> anyhow::Error {
+    anyhow::Error::msg(format!("{}", error))
 }
 
-impl StdError for CustomTideError {}
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
     let ip = req
         .remote()
-        .and_then(|addr_str| addr_str.parse::<SocketAddr>().ok())
+        .and_then(|addr_str| addr_str.parse::<std::net::SocketAddr>().ok())
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|| String::from("Unknown"));
 
@@ -92,8 +85,7 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
 
     let location_data = fetch_location_data(&ip)
         .await
-        .map_err(|e| anyhow::Error::new(CustomTideError(e)))
-        .context("Failed to fetch location data")?;
+        .map_err(|e| tide::Error::new(StatusCode::InternalServerError, e))?;
 
 
     let utc_now: DateTime<Utc> = Utc::now();
