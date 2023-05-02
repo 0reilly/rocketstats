@@ -63,7 +63,7 @@ async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
     let surf_client = surfClient::new();
 
     let response = surf_client
-        .get(&format!("http://ip-api.com/json/{}", ip))
+        .get(&format!("http://ip-api.com/json/{}", ip.to_string()))
         .recv_string()
         .await
         .map_err(anyhow::Error::msg)?;
@@ -94,13 +94,22 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
     let region = location_data["region"].as_str().unwrap_or("Unknown");
     let country = location_data["country"].as_str().unwrap_or("Unknown");
 
+    //print the region info as well
+    println!(
+        "{} - {} - {} - {}",
+        est_now.format("%Y-%m-%d %H:%M:%S").to_string(),
+        country,
+        region,
+        city
+    );
+
     println!(
         "{} - User Agent: {:?}",
         est_now.format("%Y-%m-%d %H:%M:%S").to_string(),
-        event_data.device.user_agent
+        event_data.device.user_agent.to_string()
     );
-    println!("   - Referrer: {:?}", event_data.referrer);
-    println!("   - URL: {:?}", event_data.url);
+    println!("   - Referrer: {:?}", event_data.referrer.to_string());
+    println!("   - URL: {:?}", event_data.url.to_string());
 
     let events = db.collection("events");
     let document = doc! {
