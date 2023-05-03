@@ -2106,6 +2106,7 @@ dependencies = [
  "async-native-tls",
  "chrono",
  "chrono-tz",
+ "futures-util",
  "mongodb",
  "reqwest",
  "serde",

@@ -1,8 +1,7 @@
 use std::env;
 use std::str::FromStr;
-use mongodb::{bson::doc, options::ClientOptions, Client};
-use serde::Deserialize;
-use tide::{Request, Response, StatusCode};
+use mongodb::{bson::doc, options::ClientOptions, Client, options::FindOptions, bson};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
@@ -11,6 +10,10 @@ use tide::http::headers::HeaderValue;
 use surf::Client as surfClient;
 use tide::log::LevelFilter;
 use tide::security::{CorsMiddleware, Origin};
+use std::collections::HashMap;
+use futures_util::stream::StreamExt;
+
+use tide::{Request, Response, StatusCode};
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -23,6 +26,14 @@ struct EventData {
 #[derive(Debug, Deserialize)]
 struct Device {
     user_agent: String,
+}
+
+#[derive(Serialize, Deserialize)] // Add Deserialize to VisitorStats
+struct VisitorStats {
+    visitor_count: usize,
+    pageviews: HashMap<String, usize>,
+    locations: HashMap<String, usize>,
+    sources: HashMap<String, usize>,
 }
 
 #[tokio::main]
@@ -51,18 +62,60 @@ async fn main() -> anyhow::Result<()> {
 
     app.with(cors);
 
-
     app.at("/static").serve_dir("static/")?;
-    app.at("/api/tracking/event").post(move |req: Request<()>| handle_event(req, db.clone()));
+    app.at("/api/tracking/event").post({
+        let db = db.clone();
+        move |req: Request<()>| handle_event(req, db.clone())
+    });
 
+    app.at("/:domain").get({
+        let db = db.clone();
+        move |req: Request<()>| {
+            let db = db.clone();
+            async move {
+                let domain = req.param("domain")?.to_string();
+                fetch_all_statistics(db, domain).await
+            }
+        }
+    });
 
     app.listen(format!("0.0.0.0:{}", port)).await?;
     Result::<(), anyhow::Error>::Ok(())
 }
 
+async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Result {
+    let events = db.collection("events");
+
+    let filter = doc! {
+        "domain": domain
+    };
+
+    let options = FindOptions::builder().sort(doc! { "timestamp": -1 }).build();
+    let mut cursor = events.find(filter, options).await?;
+
+    let mut visitor_stats = Vec::new();
+    while let Some(result) = cursor.next().await {
+        match result {
+            Ok(document) => {
+                if let Ok(stat) = bson::from_bson::<VisitorStats>(bson::Bson::Document(document)) {
+                    visitor_stats.push(stat);
+                }
+            }
+            Err(_) => {
+                return Ok(Response::new(StatusCode::InternalServerError));
+            }
+        }
+    }
+
+    let json_string = serde_json::to_string(&visitor_stats)?;
+    let body = tide::Body::from_json(&json_string)?;
+    let mut response = Response::new(StatusCode::Ok);
+    response.set_body(body);
+    Ok(response)
+}
+
 async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
     let surf_client = surfClient::new();
-
     let response = surf_client
         .get(&format!("http://ip-api.com/json/{}", ip.to_string()))
         .recv_string()
@@ -80,9 +133,7 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
         .map(|value| value.as_str().to_owned())
         .unwrap_or_else(|| String::from("Unknown"));
 
-    //print ip address without formatting
     println!("   - IP: {:?}", ip);
-
 
     let event_data: EventData = req.body_json().await?;
 
@@ -90,15 +141,11 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
         .await
         .map_err(|e| tide::Error::new(StatusCode::InternalServerError, e))?;
 
-
     let utc_now: DateTime<Utc> = Utc::now();
     let est_now = utc_now.with_timezone(&Eastern);
-    // Get the city, region (state), and country
     let city = location_data["city"].as_str().unwrap_or("Unknown");
     let region = location_data["region"].as_str().unwrap_or("Unknown");
     let country = location_data["country"].as_str().unwrap_or("Unknown");
-
-    //print the region info as well
     println!(
         "{} - {} - {} - {}",
         est_now.format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -117,15 +164,15 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
 
     let events = db.collection("events");
     let document = doc! {
-        "domain": event_data.domain,
-        "url": event_data.url,
-        "referrer": event_data.referrer,
-        "user_agent": event_data.device.user_agent,
-        "country": country,
-        "region": region,
-        "city": city,
-        "timestamp": est_now.to_rfc3339(),
-    };
+    "domain": event_data.domain,
+    "url": event_data.url,
+    "referrer": event_data.referrer,
+    "user_agent": event_data.device.user_agent,
+    "country": country,
+    "region": region,
+    "city": city,
+    "timestamp": est_now.to_rfc3339(),
+};
 
     events.insert_one(document, None).await?;
 
