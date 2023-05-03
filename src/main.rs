@@ -75,9 +75,14 @@ async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
 }
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
-    let ip = req.peer_addr()
-        .map(|addr| addr.to_string())
+    let ip = req.header("X-Forwarded-For")
+        .and_then(|values| values.get(0))
+        .map(|value| value.as_str().to_owned())
         .unwrap_or_else(|| String::from("Unknown"));
+
+    //print ip address without formatting
+    println!("   - IP: {:?}", ip);
+
 
     let event_data: EventData = req.body_json().await?;
 
