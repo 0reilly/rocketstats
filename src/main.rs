@@ -8,8 +8,9 @@ use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
 use anyhow::{Context};
 use tide::http::headers::HeaderValue;
-use tide::security::{CorsMiddleware, Origin};
 use surf::Client as surfClient;
+use tide::log::LevelFilter;
+use tide::security::{CorsMiddleware, Origin};
 
 #[derive(Debug, Deserialize)]
 struct EventData {
@@ -30,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|port| u16::from_str(&port).ok())
         .unwrap_or(8080);
-    tide::log::start();
+    tide::log::with_level(LevelFilter::Info);
 
     let mongo_username = env::var("MONGO_USERNAME").expect("MONGO_USERNAME must be set");
     let mongo_password = env::var("MONGO_PASSWORD").expect("MONGO_PASSWORD must be set");
@@ -74,10 +75,8 @@ async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
 }
 
 async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Result {
-    let ip = req
-        .remote()
-        .and_then(|addr_str| addr_str.parse::<std::net::SocketAddr>().ok())
-        .map(|addr| addr.ip().to_string())
+    let ip = req.peer_addr()
+        .map(|addr| addr.to_string())
         .unwrap_or_else(|| String::from("Unknown"));
 
     let event_data: EventData = req.body_json().await?;
