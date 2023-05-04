@@ -12,8 +12,8 @@ use tide::log::LevelFilter;
 use tide::security::{CorsMiddleware, Origin};
 use std::collections::HashMap;
 use futures_util::stream::StreamExt;
-
 use tide::{Request, Response, StatusCode};
+
 
 #[derive(Debug, Deserialize, Serialize)]
 struct EventData {
@@ -42,12 +42,47 @@ struct Device {
     user_agent: String,
 }
 
-#[derive(Serialize, Deserialize)] // Add Deserialize to VisitorStats
+#[derive(Debug, Serialize, Deserialize)]
 struct VisitorStats {
     visitor_count: usize,
     pageviews: HashMap<String, usize>,
-    locations: HashMap<String, usize>,
+    locations: HashMap<String, (String, usize)>,
+    // Updated to include the full region name
     sources: HashMap<String, usize>,
+}
+
+#[derive(Serialize)]
+struct PrettyVisitorStats {
+    visitor_count: usize,
+    pageviews: String,
+    locations: String,
+    sources: String,
+}
+
+impl From<VisitorStats> for PrettyVisitorStats {
+    fn from(stats: VisitorStats) -> Self {
+        let pageviews = stats.pageviews.into_iter()
+            .map(|(url, count)| format!("{}: {}", url, count))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let locations = stats.locations.into_iter()
+            .map(|(location, (region, count))| format!("{} ({}): {}", location, region, count))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let sources = stats.sources.into_iter()
+            .map(|(referrer, count)| format!("{}: {}", referrer, count))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Self {
+            visitor_count: stats.visitor_count,
+            pageviews,
+            locations,
+            sources,
+        }
+    }
 }
 
 #[tokio::main]
@@ -82,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
         move |req: Request<()>| handle_event(req, db.clone())
     });
 
-    app.at("/:domain").get({
+    app.at("/api/tracking/:domain").get({
         let db = db.clone();
         move |req: Request<()>| {
             let db = db.clone();
@@ -94,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    app.at("/api/all-data").get({
+    app.at("/api/tracking/all-data").get({
         let db = db.clone();
         move |req: Request<()>| get_all_data(req, db.clone())
     });
@@ -125,8 +160,8 @@ async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result 
         }
     }
 
-    let json_string = serde_json::to_string(&all_data)?;
-    let body = tide::Body::from_json(&json_string)?;
+    let json_value = serde_json::to_value(&all_data)?;
+    let body = tide::Body::from(json_value);
     let mut response = Response::new(StatusCode::Ok);
     response.set_body(body);
     Ok(response)
@@ -157,7 +192,9 @@ async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Re
                     // Update visitor_stats based on event_data
                     visitor_stats.visitor_count += 1;
                     *visitor_stats.pageviews.entry(event_data.url).or_insert(0) += 1;
-                    *visitor_stats.locations.entry(event_data.city).or_insert(0) += 1;
+                    let location_key = format!("{}, {}", event_data.city, event_data.region);
+                    let location_entry = visitor_stats.locations.entry(location_key).or_insert((event_data.region.clone(), 0));
+                    location_entry.1 += 1;
                     *visitor_stats.sources.entry(event_data.referrer).or_insert(0) += 1;
                 }
             }
@@ -167,8 +204,9 @@ async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Re
         }
     }
 
-    let json_string = serde_json::to_string(&visitor_stats)?;
-    let body = tide::Body::from_json(&json_string)?;
+    let pretty_visitor_stats = PrettyVisitorStats::from(visitor_stats);
+    let json_value = serde_json::to_value(&pretty_visitor_stats)?;
+    let body = tide::Body::from(json_value);
     let mut response = Response::new(StatusCode::Ok);
     response.set_body(body);
     Ok(response)
