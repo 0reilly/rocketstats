@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
             let db = db.clone();
             async move {
                 let domain = req.param("domain")?.to_string();
-                println!("domain - {:?}", domain)
+                println!("domain - {:?}", domain);
                 fetch_all_statistics(db, domain).await
             }
         }
