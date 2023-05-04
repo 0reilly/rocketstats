@@ -24,6 +24,20 @@ struct EventData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+struct StoredEventData {
+    #[serde(rename = "_id")]
+    id: bson::oid::ObjectId,
+    domain: String,
+    url: String,
+    referrer: String,
+    user_agent: String,
+    country: String,
+    region: String,
+    city: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 struct Device {
     user_agent: String,
 }
@@ -96,13 +110,12 @@ async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result 
     println!("events - {:?}", events);
     let mut cursor = events.find(None, None).await?;
 
-
     let mut all_data = Vec::new();
     while let Some(result) = cursor.next().await {
         match result {
             Ok(document) => {
                 println!("document - {:?}", document);
-                if let Ok(event_data) = bson::from_bson::<EventData>(bson::Bson::Document(document)) {
+                if let Ok(event_data) = bson::from_bson::<StoredEventData>(bson::Bson::Document(document)) {
                     all_data.push(event_data);
                 }
             }
