@@ -94,6 +94,9 @@ async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result 
 
     let mut cursor = events.find(None, None).await?;
 
+    //print cursor to string
+    println!("{:?}", cursor);
+
     let mut all_data = Vec::new();
     while let Some(result) = cursor.next().await {
         match result {
@@ -207,7 +210,11 @@ async fn handle_event(mut req: Request<()>, db: mongodb::Database) -> tide::Resu
     "timestamp": est_now.to_rfc3339(),
 };
 
-    events.insert_one(document, None).await?;
+    println!("Inserting document: {:?}", document);
+
+
+    let insert_result = events.insert_one(document, None).await?;
+    println!("Insert result: {:?}", insert_result);
 
     Ok(Response::new(StatusCode::Ok))
 }
