@@ -96,13 +96,12 @@ async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result 
     println!("events - {:?}", events);
     let mut cursor = events.find(None, None).await?;
 
-    //print cursor to string
-    println!("{:?}", cursor);
 
     let mut all_data = Vec::new();
     while let Some(result) = cursor.next().await {
         match result {
             Ok(document) => {
+                println!("document - {:?}", document);
                 if let Ok(event_data) = bson::from_bson::<EventData>(bson::Bson::Document(document)) {
                     all_data.push(event_data);
                 }
