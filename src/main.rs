@@ -15,7 +15,7 @@ use futures_util::stream::StreamExt;
 
 use tide::{Request, Response, StatusCode};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct EventData {
     domain: String,
     url: String,
@@ -23,7 +23,7 @@ struct EventData {
     device: Device,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Device {
     user_agent: String,
 }
@@ -79,9 +79,42 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    app.at("/api/all-data").get({
+        let db = db.clone();
+        move |req: Request<()>| get_all_data(req, db.clone())
+    });
+
+
     app.listen(format!("0.0.0.0:{}", port)).await?;
     Result::<(), anyhow::Error>::Ok(())
 }
+
+async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result {
+    let events = db.collection("events");
+
+    let mut cursor = events.find(None, None).await?;
+
+    let mut all_data = Vec::new();
+    while let Some(result) = cursor.next().await {
+        match result {
+            Ok(document) => {
+                if let Ok(event_data) = bson::from_bson::<EventData>(bson::Bson::Document(document)) {
+                    all_data.push(event_data);
+                }
+            }
+            Err(_) => {
+                return Ok(Response::new(StatusCode::InternalServerError));
+            }
+        }
+    }
+
+    let json_string = serde_json::to_string(&all_data)?;
+    let body = tide::Body::from_json(&json_string)?;
+    let mut response = Response::new(StatusCode::Ok);
+    response.set_body(body);
+    Ok(response)
+}
+
 
 async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Result {
     let events = db.collection("events");
