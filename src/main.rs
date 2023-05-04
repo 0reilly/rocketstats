@@ -143,12 +143,22 @@ async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Re
     let options = FindOptions::builder().sort(doc! { "timestamp": -1 }).build();
     let mut cursor = events.find(filter, options).await?;
 
-    let mut visitor_stats = Vec::new();
+    let mut visitor_stats = VisitorStats {
+        visitor_count: 0,
+        pageviews: HashMap::new(),
+        locations: HashMap::new(),
+        sources: HashMap::new(),
+    };
+
     while let Some(result) = cursor.next().await {
         match result {
             Ok(document) => {
-                if let Ok(stat) = bson::from_bson::<VisitorStats>(bson::Bson::Document(document)) {
-                    visitor_stats.push(stat);
+                if let Ok(event_data) = bson::from_bson::<StoredEventData>(bson::Bson::Document(document)) {
+                    // Update visitor_stats based on event_data
+                    visitor_stats.visitor_count += 1;
+                    *visitor_stats.pageviews.entry(event_data.url).or_insert(0) += 1;
+                    *visitor_stats.locations.entry(event_data.city).or_insert(0) += 1;
+                    *visitor_stats.sources.entry(event_data.referrer).or_insert(0) += 1;
                 }
             }
             Err(_) => {
@@ -163,6 +173,7 @@ async fn fetch_all_statistics(db: mongodb::Database, domain: String) -> tide::Re
     response.set_body(body);
     Ok(response)
 }
+
 
 async fn fetch_location_data(ip: &str) -> anyhow::Result<Value> {
     let surf_client = surfClient::new();
