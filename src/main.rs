@@ -74,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
             let db = db.clone();
             async move {
                 let domain = req.param("domain")?.to_string();
+                println!("domain - {:?}", domain)
                 fetch_all_statistics(db, domain).await
             }
         }
@@ -92,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
 async fn get_all_data(_req: Request<()>, db: mongodb::Database) -> tide::Result {
     let events = db.collection("events");
 
+    println!("events - {:?}", events);
     let mut cursor = events.find(None, None).await?;
 
     //print cursor to string
