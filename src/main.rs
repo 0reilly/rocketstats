@@ -51,30 +51,46 @@ struct VisitorStats {
     sources: HashMap<String, usize>,
 }
 
-#[derive(Serialize)]
-struct PrettyVisitorStats {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PrettyVisitorStats {
     visitor_count: usize,
-    pageviews: String,
-    locations: String,
-    sources: String,
+    pageviews: Vec<PrettyPageview>,
+    locations: Vec<PrettyLocation>,
+    sources: Vec<PrettySource>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PrettyPageview {
+    url: String,
+    count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PrettyLocation {
+    location: String,
+    region: String,
+    count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PrettySource {
+    referrer: String,
+    count: usize,
 }
 
 impl From<VisitorStats> for PrettyVisitorStats {
     fn from(stats: VisitorStats) -> Self {
         let pageviews = stats.pageviews.into_iter()
-            .map(|(url, count)| format!("{}: {}", url, count))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .map(|(url, count)| PrettyPageview { url, count })
+            .collect();
 
         let locations = stats.locations.into_iter()
-            .map(|(location, (region, count))| format!("{} ({}): {}", location, region, count))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .map(|(location, (region, count))| PrettyLocation { location, region, count })
+            .collect();
 
         let sources = stats.sources.into_iter()
-            .map(|(referrer, count)| format!("{}: {}", referrer, count))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .map(|(referrer, count)| PrettySource { referrer, count })
+            .collect();
 
         Self {
             visitor_count: stats.visitor_count,

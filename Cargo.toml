@@ -18,6 +18,8 @@ surf = { version = "2.3.2" }
 async-native-tls = "0.3.3"
 mongodb = { version = "2.5.0", default-features = false, features = ["async-std-runtime"] }
 futures-util = "0.3"
+yew = { version = "0.18.0", features = ["web_sys"] }
+
 
 [tide]
 default-features = false

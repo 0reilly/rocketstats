@@ -11,7 +11,7 @@ services:
         volumes:
             - mongodb_data:/data/db
 
-    rocketstats_backend:
+    backend:
         build: .
         environment:
             MONGO_USERNAME: root
